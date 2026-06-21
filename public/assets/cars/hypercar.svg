@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 760">
+  <defs>
+    <linearGradient id="body" x1="0" x2="1">
+      <stop offset="0" stop-color="#14171a"/>
+      <stop offset=".45" stop-color="#f2f0e8"/>
+      <stop offset="1" stop-color="#121417"/>
+    </linearGradient>
+    <linearGradient id="amber" x1="0" x2="1">
+      <stop offset="0" stop-color="#ff7a18"/>
+      <stop offset="1" stop-color="#ffd23f"/>
+    </linearGradient>
+  </defs>
+  <path d="M78 702h164l28-86V162l-34-86L196 38h-72L84 76 50 162v454z" fill="url(#body)" stroke="#050607" stroke-width="8"/>
+  <path d="M112 84h96l24 84v410l-28 82h-88l-28-82V168z" fill="#20252a" opacity=".55"/>
+  <path d="M136 52h48l20 82-20 96h-48l-20-96z" fill="#050607" opacity=".8"/>
+  <path d="M96 642h128l-18 52h-92z" fill="#050607"/>
+  <path d="M64 196h56v120H50zM200 196h56l14 120h-70zM50 456h70v120H64zM200 456h70l-14 120h-56z" fill="#08090b"/>
+  <path d="M146 70h28v600h-28z" fill="url(#amber)"/>
+  <path d="M82 120l34-36v560l-34-38zM238 120l-34-36v560l34-38z" fill="#f8f6ed" opacity=".85"/>
+  <circle cx="160" cy="382" r="38" fill="#11161b" stroke="#f8f6ed" stroke-width="3"/>
+  <text x="160" y="394" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" font-weight="800" fill="#ffd23f">PP</text>
+</svg>
