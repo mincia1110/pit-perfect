@@ -1,21 +1,29 @@
 import Phaser from 'phaser';
 import type { GameController, PitStopSnapshot, TimingNote } from '../../core';
+import { assetManifest } from '../../assets/manifest';
+import { InputMapper } from '../input/InputMapper';
 import { LayoutService } from '../layout/LayoutService';
+
+interface HitTarget {
+  container: Phaser.GameObjects.Container;
+  hitCircle: Phaser.GameObjects.Arc;
+  approachCircle: Phaser.GameObjects.Arc;
+  label: Phaser.GameObjects.Text;
+}
+
+const HIT_RADIUS = 42;
+const APPROACH_SECONDS = 0.9;
 
 export class PitStopScene extends Phaser.Scene {
   private controller!: GameController;
   private layoutService = new LayoutService();
+  private inputMapper = new InputMapper();
   private snapshot!: PitStopSnapshot;
-  private keyartBackdrop?: Phaser.GameObjects.Image;
-  private pitBackdrop?: Phaser.GameObjects.Image;
-  private pitOverlay?: Phaser.GameObjects.Image;
+  private background?: Phaser.GameObjects.Image;
   private car?: Phaser.GameObjects.Image;
-  private carSilhouette?: Phaser.GameObjects.Image;
   private operators: Record<'A' | 'B', Phaser.GameObjects.Image | undefined> = { A: undefined, B: undefined };
   private wheelSprites = new Map<string, Phaser.GameObjects.Image>();
-  private rings = new Map<string, Phaser.GameObjects.Arc>();
-  private message?: Phaser.GameObjects.Text;
-  private timer?: Phaser.GameObjects.Text;
+  private hitTargets = new Map<string, HitTarget>();
 
   constructor() {
     super('PitStopScene');
@@ -26,20 +34,15 @@ export class PitStopScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.keyartBackdrop = this.add.image(0, 0, 'keyart').setOrigin(0.5).setDepth(-1).setAlpha(0.34);
-    this.pitBackdrop = this.add.image(0, 0, 'pitbox-scene').setOrigin(0.5).setDepth(0).setAlpha(0.92);
-    this.add.rectangle(0, 0, 1, 1, 0x050607, 0.42).setOrigin(0).setDepth(1).setName('scene-vignette');
-    this.pitOverlay = this.add.image(0, 0, 'pit-markings').setOrigin(0.5).setAlpha(0.55).setDepth(2);
-    this.car = this.add.image(0, 0, 'hypercar-generated').setDepth(3);
-    this.car.setCrop(374, 28, 506, 1200);
-    this.carSilhouette = this.add.image(0, 0, 'hypercar-silhouette').setDepth(4).setAlpha(0.32).setTint(0x111418);
-    this.operators.A = this.add.image(0, 0, 'operator').setDepth(6);
-    this.operators.B = this.add.image(0, 0, 'operator').setDepth(6);
+    this.background = this.add.image(this.scale.width / 2, this.scale.height / 2, assetManifest.pit.key).setDepth(0);
+    this.fitBackground();
+
+    this.car = this.add.image(0, 0, assetManifest.carCutout.key).setDepth(2);
+    this.operators.A = this.add.image(0, 0, 'operator').setDepth(4);
+    this.operators.B = this.add.image(0, 0, 'operator').setDepth(4);
     ['FRONT_LEFT', 'REAR_LEFT', 'FRONT_RIGHT', 'REAR_RIGHT'].forEach((wheel) => {
-      this.wheelSprites.set(wheel, this.add.image(0, 0, 'wheel').setDepth(5));
+      this.wheelSprites.set(wheel, this.add.image(0, 0, 'wheel').setDepth(3));
     });
-    this.timer = this.add.text(0, 0, '00:00.000', { fontFamily: 'Arial, sans-serif', fontSize: '28px', color: '#ffd23f', fontStyle: 'bold' }).setOrigin(0.5).setDepth(9);
-    this.message = this.add.text(0, 0, 'READY', { fontFamily: 'Arial, sans-serif', fontSize: '18px', color: '#f6f1df', fontStyle: 'bold' }).setOrigin(0.5).setDepth(9);
     this.controller.subscribe((snapshot, event) => {
       this.snapshot = snapshot;
       if (event?.type === 'JUDGEMENT' || event?.type === 'PENALTY' || event?.type === 'SYNC') {
@@ -47,7 +50,10 @@ export class PitStopScene extends Phaser.Scene {
       }
       this.renderSnapshot();
     });
-    this.scale.on('resize', () => this.renderSnapshot());
+    this.scale.on('resize', () => {
+      this.fitBackground();
+      this.renderSnapshot();
+    });
   }
 
   override update(time: number): void {
@@ -55,65 +61,145 @@ export class PitStopScene extends Phaser.Scene {
     this.renderSnapshot();
   }
 
+  private fitBackground(): void {
+    if (!this.background) return;
+    // Cover the canvas while preserving the pit scene's aspect ratio.
+    const asset = assetManifest.pit;
+    const scale = Math.max(this.scale.width / asset.width, this.scale.height / asset.height);
+    const displayWidth = asset.width * scale;
+    const displayHeight = asset.height * scale;
+    this.background
+      .setPosition(this.scale.width / 2, this.scale.height / 2)
+      .setDisplaySize(displayWidth, displayHeight)
+      .setAlpha(0.85);
+  }
+
   private renderSnapshot(): void {
     if (!this.snapshot) return;
     const layout = this.layoutService.calculate(this.scale.width, this.scale.height, this.snapshot);
-    this.renderStage();
-    this.car
-      ?.setPosition(layout.car.x, layout.car.y)
-      .setDisplaySize(320 * layout.car.scale, 760 * layout.car.scale)
-      .setAngle(layout.car.angle);
-    this.carSilhouette?.setPosition(layout.car.x, layout.car.y).setScale(layout.car.scale * 1.02).setAngle(layout.car.angle);
-    this.operators.A?.setPosition(layout.operators.A.x, layout.operators.A.y).setScale(layout.car.scale * 0.58).setFlipX(this.snapshot.activeSide === 'RIGHT');
-    this.operators.B?.setPosition(layout.operators.B.x, layout.operators.B.y).setScale(layout.car.scale * 0.58).setFlipX(this.snapshot.activeSide === 'RIGHT');
+    this.car?.setPosition(layout.car.x, layout.car.y).setScale(layout.car.scale).setAngle(layout.car.angle);
+    const facingRight = this.snapshot.activeSide === 'RIGHT';
+    this.operators.A?.setPosition(layout.operators.A.x, layout.operators.A.y).setScale(this.layoutService.operatorScale).setFlipX(facingRight);
+    this.operators.B?.setPosition(layout.operators.B.x, layout.operators.B.y).setScale(this.layoutService.operatorScale).setFlipX(facingRight);
     Object.entries(layout.wheels).forEach(([wheel, point]) => {
       const complete = this.snapshot.wheels[wheel as keyof typeof this.snapshot.wheels].step === 'DONE';
-      this.wheelSprites.get(wheel)?.setPosition(point.x, point.y).setScale(layout.car.scale * 0.27).setAlpha(complete ? 0.35 : 1);
+      this.wheelSprites.get(wheel)?.setPosition(point.x, point.y).setScale(this.layoutService.wheelScale).setAlpha(complete ? 0.16 : 0.48);
     });
-    this.timer?.setPosition(layout.timer.x, layout.timer.y).setText(formatTime(this.snapshot.score?.finalPitTime ?? this.snapshot.elapsedTime));
-    this.message?.setPosition(layout.message.x, layout.message.y).setText(this.snapshot.phase.replaceAll('_', ' '));
-    this.renderRings(layout.wheels);
+    this.renderHitTargets(layout);
   }
 
-  private renderStage(): void {
-    const { width, height } = this.scale;
-    const coverScale = Math.max(width / 1672, height / 941);
-    this.keyartBackdrop?.setPosition(width / 2, height / 2).setScale(coverScale);
-    this.pitBackdrop?.setPosition(width / 2, height / 2).setScale(coverScale);
-    this.pitOverlay?.setPosition(width / 2, height / 2).setDisplaySize(width, height);
-    (this.children.getByName('scene-vignette') as Phaser.GameObjects.Rectangle | null)?.setDisplaySize(width, height);
+  private renderHitTargets(layout: ReturnType<LayoutService['calculate']>): void {
+    if (this.snapshot.phase === 'READY') {
+      this.removeInactiveTargets(new Set(['start']));
+      this.renderStartTarget(layout.car.x, layout.car.y);
+      return;
+    }
+
+    const notes = this.actionableNotes();
+    const activeIds = new Set(notes.map((note) => note.id));
+    this.removeInactiveTargets(activeIds);
+    notes.forEach((note) => this.renderHitTarget(note, this.targetPoint(note, layout)));
   }
 
-  private renderRings(wheels: Record<string, { x: number; y: number }>): void {
-    const activeIds = new Set(this.snapshot.notes.map((note) => note.id));
-    this.rings.forEach((ring, id) => {
+  private actionableNotes(): TimingNote[] {
+    const lanes = new Set<TimingNote['lane']>();
+    return this.snapshot.notes.filter((note) => {
+      if (note.phase !== this.snapshot.phase || lanes.has(note.lane)) return false;
+      lanes.add(note.lane);
+      return true;
+    });
+  }
+
+  private removeInactiveTargets(activeIds: Set<string>): void {
+    this.hitTargets.forEach((target, id) => {
       if (!activeIds.has(id)) {
-        ring.destroy();
-        this.rings.delete(id);
+        target.container.destroy();
+        this.hitTargets.delete(id);
       }
     });
-    this.snapshot.notes.slice(0, 4).forEach((note) => this.renderRing(note, wheels));
   }
 
-  private renderRing(note: TimingNote, wheels: Record<string, { x: number; y: number }>): void {
-    const point = note.wheel ? wheels[note.wheel] : { x: this.scale.width / 2, y: this.scale.height * 0.68 };
-    const now = performance.now() / 1000;
-    const until = Math.max(0, note.expectedTime - now);
-    const radius = 28 + Math.min(54, until * 42);
+  private renderStartTarget(x: number, y: number): void {
+    const target = this.getOrCreateTarget('start', 0xffd23f, 'START', () => {
+      this.controller.dispatch(this.inputMapper.mapStart(), performance.now() / 1000);
+    });
+    target.container.setPosition(x, y);
+    target.approachCircle.setRadius(HIT_RADIUS + 28);
+  }
+
+  private renderHitTarget(note: TimingNote, point: { x: number; y: number }): void {
     const color = note.lane === 'A' ? 0xffd23f : note.lane === 'B' ? 0x5ec7ff : 0xff7a18;
-    const ring = this.rings.get(note.id) ?? this.add.circle(point.x, point.y, radius).setDepth(8) as Phaser.GameObjects.Arc;
-    ring.setPosition(point.x, point.y).setRadius(radius).setStrokeStyle(5, color, 0.9).setFillStyle(color, 0.04);
-    this.rings.set(note.id, ring);
+    const target = this.getOrCreateTarget(note.id, color, targetLabel(note), () => {
+      this.controller.dispatch(this.inputMapper.mapNote(note), performance.now() / 1000);
+    });
+    const now = performance.now() / 1000;
+    const progress = Phaser.Math.Clamp((note.expectedTime - now) / APPROACH_SECONDS, 0, 1);
+    target.container.setPosition(point.x, point.y);
+    target.approachCircle.setRadius(HIT_RADIUS + progress * 68);
+  }
+
+  private getOrCreateTarget(id: string, color: number, label: string, onHit: () => void): HitTarget {
+    const existing = this.hitTargets.get(id);
+    if (existing) return existing;
+
+    const shadow = this.add.circle(3, 5, HIT_RADIUS + 4, 0x000000, 0.48);
+    const hitCircle = this.add.circle(0, 0, HIT_RADIUS, color, 0.82).setStrokeStyle(5, 0xffffff, 0.9);
+    const inner = this.add.circle(0, 0, HIT_RADIUS * 0.62, 0x090a0c, 0.72).setStrokeStyle(2, color, 1);
+    const approachCircle = this.add.circle(0, 0, HIT_RADIUS + 68, color, 0).setStrokeStyle(5, color, 0.92);
+    const text = this.add.text(0, 0, label, {
+      fontFamily: 'Arial, sans-serif',
+      fontSize: label.length > 7 ? '11px' : '13px',
+      color: '#ffffff',
+      fontStyle: 'bold',
+      align: 'center',
+      stroke: '#090a0c',
+      strokeThickness: 3,
+    }).setOrigin(0.5);
+    const container = this.add.container(0, 0, [shadow, hitCircle, inner, approachCircle, text]).setDepth(12);
+    container.setSize((HIT_RADIUS + 18) * 2, (HIT_RADIUS + 18) * 2);
+    container.setInteractive();
+    container.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      pointer.event.preventDefault();
+      if ('vibrate' in navigator) navigator.vibrate?.(12);
+      this.input.setDefaultCursor('default');
+      onHit();
+    });
+    container.on('pointerover', () => {
+      this.input.setDefaultCursor('pointer');
+      container.setScale(1.06);
+    });
+    container.on('pointerout', () => {
+      this.input.setDefaultCursor('default');
+      container.setScale(1);
+    });
+
+    const target = { container, hitCircle, approachCircle, label: text };
+    this.hitTargets.set(id, target);
+    return target;
+  }
+
+  private targetPoint(note: TimingNote, layout: ReturnType<LayoutService['calculate']>): { x: number; y: number } {
+    if (note.wheel) return layout.wheels[note.wheel];
+    if (note.action === 'RELEASE') return { x: layout.car.x, y: layout.car.y + 118 * layout.car.scale };
+    return { x: layout.car.x, y: layout.car.y };
   }
 
   private flash(text: string, color: string): void {
-    const pop = this.add.text(this.scale.width / 2, this.scale.height * 0.22, text, { fontFamily: 'Arial, sans-serif', fontSize: '32px', color, fontStyle: 'bold' }).setOrigin(0.5).setDepth(20);
-    this.tweens.add({ targets: pop, y: pop.y - 36, alpha: 0, duration: 700, ease: 'Cubic.easeOut', onComplete: () => pop.destroy() });
+    const pop = this.add.text(this.scale.width / 2, this.scale.height * 0.22, text, {
+      fontFamily: 'Arial, sans-serif',
+      fontSize: '34px',
+      color,
+      fontStyle: 'bold',
+      stroke: '#090a0c',
+      strokeThickness: 6,
+      shadow: { offsetX: 0, offsetY: 2, color: '#000', blur: 8, fill: true, stroke: true },
+    }).setOrigin(0.5).setDepth(20);
+    this.tweens.add({ targets: pop, y: pop.y - 40, alpha: 0, duration: 750, ease: 'Cubic.easeOut', onComplete: () => pop.destroy() });
   }
 }
 
-function formatTime(seconds: number): string {
-  const minutes = Math.floor(seconds / 60).toString().padStart(2, '0');
-  const rest = (seconds % 60).toFixed(3).padStart(6, '0');
-  return `${minutes}:${rest}`;
+function targetLabel(note: TimingNote): string {
+  if (note.action === 'CROSSOVER') return 'MOVE';
+  if (note.action === 'RELEASE') return 'GO';
+  return note.action;
 }

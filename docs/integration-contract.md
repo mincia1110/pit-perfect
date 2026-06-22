@@ -4,6 +4,7 @@ Frontend code must import from `src/core` public exports and use `GameController
 
 ## Commands
 
+- `START_RUN`
 - `OPERATOR_A_PRESS`
 - `OPERATOR_A_RELEASE`
 - `OPERATOR_B_PRESS`

@@ -2,6 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { configForDifficulty, GameController, type GameCommand } from '../../src/core';
 
 describe('GameController integration', () => {
+  it('starts a run without consuming the first timing note', async () => {
+    const controller = new GameController();
+    await controller.startGame(configForDifficulty('PRO', 7));
+
+    controller.dispatch('START_RUN', 10);
+
+    const snapshot = controller.getSnapshot();
+    expect(snapshot.phase).toBe('ARRIVAL');
+    expect(snapshot.notes[0]?.id).toBe('jack-up');
+    expect(snapshot.notes[0]?.expectedTime).toBe(11);
+  });
+
   it('plays a normal full pit stop and calculates final score', async () => {
     const controller = new GameController();
     await controller.startGame(configForDifficulty('PRO', 7));

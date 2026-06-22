@@ -55,7 +55,8 @@ input {
 
 .hud,
 .toast,
-.result {
+.result,
+.pause-fab {
   pointer-events: auto;
 }
 
@@ -78,21 +79,8 @@ input {
   gap: 8px;
 }
 
-.bottom {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  min-height: max(128px, calc(30vh + env(safe-area-inset-bottom)));
-  display: grid;
-  grid-template-columns: 1fr minmax(92px, 0.42fr) 1fr;
-  gap: 8px;
-  padding: 8px max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
-}
-
 .panel,
 .field,
-.touch-zone,
 button,
 .toast,
 .result {
@@ -113,7 +101,6 @@ button,
 
 .panel span,
 .field,
-.touch-zone span,
 .toast span:first-child {
   color: var(--muted);
   font-size: 12px;
@@ -159,28 +146,10 @@ input[type="range"] {
   accent-color: var(--orange);
 }
 
-.touch-zone {
-  min-height: 96px;
-  display: grid;
-  place-items: center;
-  align-content: center;
-  gap: 4px;
-  border-color: rgb(255 210 63 / 38%);
-}
-
-.touch-zone b {
-  font-size: clamp(22px, 4vw, 36px);
-  color: var(--amber);
-}
-
-.touch-zone.center {
-  border-color: rgb(255 122 24 / 46%);
-}
-
 .toast {
   position: absolute;
   left: 50%;
-  bottom: calc(max(128px, 30vh) + 14px);
+  bottom: max(14px, env(safe-area-inset-bottom));
   transform: translateX(-50%);
   min-width: min(520px, calc(100vw - 20px));
   padding: 10px 14px;
@@ -194,10 +163,35 @@ input[type="range"] {
   font-weight: 900;
 }
 
+.pause-fab i {
+  display: block;
+  width: 5px;
+  height: 20px;
+  background: var(--text);
+  border-radius: 2px;
+}
+
+.pause-fab i + i {
+  margin-left: 4px;
+}
+
+.pause-fab {
+  position: absolute;
+  top: max(10px, env(safe-area-inset-top));
+  right: max(10px, env(safe-area-inset-right));
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+}
+
 .result {
   position: absolute;
-  inset: auto 50% max(150px, 32vh) auto;
-  transform: translateX(50%);
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
   width: min(360px, calc(100vw - 24px));
   padding: 18px;
   color: var(--text);
@@ -220,7 +214,7 @@ input[type="range"] {
 @media (orientation: portrait) {
   .left {
     top: auto;
-    bottom: calc(max(128px, 30vh) + 60px);
+    bottom: max(70px, calc(env(safe-area-inset-bottom) + 62px));
     width: min(220px, 48vw);
   }
 
@@ -242,8 +236,9 @@ input[type="range"] {
     font-size: 16px;
   }
 
-  .bottom {
-    min-height: max(150px, calc(34vh + env(safe-area-inset-bottom)));
+  .pause-fab {
+    display: flex;
+    top: max(84px, calc(env(safe-area-inset-top) + 76px));
   }
 }
 

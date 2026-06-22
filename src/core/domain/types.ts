@@ -11,6 +11,7 @@ export type GamePhase =
   | 'FINISHED';
 
 export type GameCommand =
+  | 'START_RUN'
   | 'OPERATOR_A_PRESS'
   | 'OPERATOR_A_RELEASE'
   | 'OPERATOR_B_PRESS'

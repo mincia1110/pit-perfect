@@ -8,6 +8,7 @@ import { SeededSequenceGenerator } from './state/SeededSequenceGenerator';
 import { TimingEngine } from './timing/TimingEngine';
 
 type Listener = (snapshot: PitStopSnapshot, event?: PitStopEvent) => void;
+const PHASE_APPROACH_SECONDS = 0.9;
 
 export class GameController {
   private config: GameConfig = defaultGameConfig;
@@ -45,6 +46,10 @@ export class GameController {
       return;
     }
     if (this.snapshot.isPaused || this.snapshot.phase === 'FINISHED') return;
+    if (command === 'START_RUN') {
+      if (this.snapshot.phase === 'READY') this.beginRun(timestamp);
+      return;
+    }
     if (this.snapshot.phase === 'READY') this.beginRun(timestamp);
 
     this.update(timestamp);
@@ -57,7 +62,7 @@ export class GameController {
     if (this.snapshot.phase === 'READY' || this.snapshot.isPaused) return;
     this.snapshot.elapsedTime = Math.max(0, timestamp - this.startTime);
     const nextDue = this.snapshot.notes[0];
-    if (nextDue && this.snapshot.phase !== nextDue.phase && timestamp >= nextDue.expectedTime - 0.45) {
+    if (nextDue && this.snapshot.phase !== nextDue.phase && timestamp >= nextDue.expectedTime - PHASE_APPROACH_SECONDS) {
       this.setPhase(nextDue.phase, timestamp);
     }
     this.notify();
